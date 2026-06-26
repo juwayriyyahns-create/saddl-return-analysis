@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Dashboard</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/react-is@18/umd/react-is.production.min.js"></script>
+  <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  
+  <script>
+    window.addEventListener('error', function(e) {
+      document.body.innerHTML += `
+        <div style="padding: 2rem; background: #fee2e2; color: #991b1b; font-family: monospace; border: 1px solid #ef4444; border-radius: 8px; margin: 2rem; position: relative; z-index: 50;">
+          <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">JavaScript Error Occurred</h2>
+          <p><strong>Message:</strong> ${e.message}</p>
+          <p><strong>Line:</strong> ${e.lineno}</p>
+          <p><strong>Column:</strong> ${e.colno}</p>
+        </div>
+      `;
+    });
+  </script>
+  <style>
+    @keyframes moveGrid {
+      0% { background-position: 0 0, 0 0; }
+      100% { background-position: 0 50px, 0 0; }
+    }
+    .synthwave-grid {
+      position: fixed;
+      bottom: -10vh;
+      left: -50vw;
+      width: 200vw;
+      height: 60vh;
+      background-image: 
+        linear-gradient(to bottom, rgba(236,72,153,0.3) 1px, transparent 1px),
+        linear-gradient(to right, rgba(236,72,153,0.3) 1px, transparent 1px);
+      background-size: 50px 50px;
+      transform: perspective(500px) rotateX(60deg);
+      animation: moveGrid 2s linear infinite;
+      z-index: 0;
+      pointer-events: none;
+      mask-image: linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 80%);
+      -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 80%);
+    }
+    @keyframes float1 {
+      0%, 100% { transform: translateY(0) scale(1); opacity: 0.15; }
+      50% { transform: translateY(-60px) scale(1.1); opacity: 0.25; }
+    }
+    @keyframes float2 {
+      0%, 100% { transform: translateY(0) scale(1); opacity: 0.15; }
+      50% { transform: translateY(60px) scale(0.9); opacity: 0.25; }
+    }
+    .orb-1 { animation: float1 12s ease-in-out infinite; }
+    .orb-2 { animation: float2 14s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen font-sans relative overflow-x-hidden">
+  <div class="absolute inset-0 z-0 opacity-[0.04] pointer-events-none" style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E');"></div>
+  <div class="synthwave-grid"></div>
+  <div class="absolute top-[-10%] left-[-10%] w-[50%] h-[600px] bg-purple-600/15 rounded-full blur-[120px] pointer-events-none orb-1"></div>
+  <div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[600px] bg-orange-600/15 rounded-full blur-[120px] pointer-events-none orb-2"></div>
+  <div id="root" class="relative z-10">
+    <div class="flex items-center justify-center min-h-screen">
+      <div class="animate-pulse flex flex-col items-center gap-4">
+        <p class="text-gray-500 font-medium">Loading Dashboard...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    Babel.registerPreset("my-react", {
+      presets: [
+        [Babel.availablePresets["react"], { "runtime": "classic" }]
+      ]
+    });
+  </script>
+
+  <script type="text/babel" data-presets="my-react">
+    const { useState, useMemo, useEffect } = React;
+
+    const Icon = ({ children, className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+    );
+    const PackageMinus = (props) => <Icon {...props}><path d="M16 16h6"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/><path d="m7.5 4.27 9 5.15"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></Icon>;
+    const CircleDollarSign = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></Icon>;
+    const Receipt = (props) => <Icon {...props}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-1.5"/><path d="M12 8.5V7"/></Icon>;
+    const AlertCircle = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>;
+    const Percent = (props) => <Icon {...props}><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></Icon>;
+    const CheckCircle2 = (props) => <Icon {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Icon>;
+
+    const TopNav = () => (
+      <header className="w-full bg-slate-950/80 backdrop-blur-xl shadow-[0_4px_30px_rgba(236,72,153,0.1)] border-b border-pink-500/30 sticky top-0 z-50">
+        <div className="px-6 h-16 flex items-center">
+          <span className="font-bold text-pink-400 text-lg tracking-tight drop-shadow-[0_0_8px_rgba(236,72,153,0.8)]">Returns Dashboard</span>
+        </div>
+      </header>
+    );
+
+    const PanelCard = ({ title, children }) => (
+      <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-[0_0_15px_rgba(236,72,153,0.1)] border border-pink-500/20 overflow-hidden mb-6 relative transition-all">
+        <div className="bg-purple-950/30 border-b border-pink-500/20 px-6 py-4">
+          <h2 className="text-pink-300 font-bold text-xs uppercase tracking-wider">{title}</h2>
+        </div>
+        <div className="p-6">
+          {children}
+        </div>
+      </div>
+    );
+
+    const FilterBar = ({ selectedCountry = 'UAE', onCountryChange, startDate, endDate, onDateChange, saddlId, onSaddlIdChange, availableSaddlIds = [] }) => {
+      const formatDateForInput = (isoString) => isoString ? isoString.split('T')[0] : '';
+      const handleStartDateChange = (e) => onDateChange({ startDate: e.target.value ? new Date(e.target.value).toISOString() : '', endDate });
+      const handleEndDateChange = (e) => onDateChange({ startDate, endDate: e.target.value ? new Date(e.target.value).toISOString() : '' });
+
+      return (
+        <PanelCard title="Dashboard Filters">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="flex flex-col gap-2 w-full md:w-auto">
+              <label className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Region</label>
+              <select value={selectedCountry} onChange={(e) => onCountryChange(e.target.value)} className="bg-slate-900/80 text-orange-100 border border-orange-500/30 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-full md:w-48 shadow-[0_0_10px_rgba(249,115,22,0.1)] transition-all">
+                <option value="All">All Regions</option><option value="UAE">UAE</option><option value="KSA">KSA</option>
+              </select>
+            </div>
+            
+            <div className="flex flex-col gap-2 w-full md:w-auto">
+              <label className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Date Range</label>
+              <div className="flex items-center gap-2">
+                <input type="date" value={formatDateForInput(startDate)} onChange={handleStartDateChange} className="bg-slate-900/80 text-orange-100 border border-orange-500/30 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.1)] transition-all" />
+                <span className="text-orange-500 font-semibold">-</span>
+                <input type="date" value={formatDateForInput(endDate)} onChange={handleEndDateChange} className="bg-slate-900/80 text-orange-100 border border-orange-500/30 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.1)] transition-all" />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 w-full md:w-auto">
+              <label className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Saddl ID</label>
+              <select value={saddlId} onChange={(e) => onSaddlIdChange(e.target.value)} className="bg-slate-900/80 text-orange-100 border border-orange-500/30 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-full md:w-48 shadow-[0_0_10px_rgba(249,115,22,0.1)] transition-all">
+                <option value="All">All Saddl IDs</option>
+                {availableSaddlIds.map(id => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </PanelCard>
+      );
+    };
+
+    const KpiCards = ({ kpis = {}, selectedCountry, loading }) => {
+      const currency = selectedCountry === 'KSA' ? 'SAR' : 'AED';
+      const formatCurrency = (val) => val === undefined || val === null ? '-' : `${currency} ${val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+      const formatNumber = (val) => val === undefined || val === null ? '-' : val.toLocaleString();
+      const formatPercent = (val) => val === undefined || val === null ? '-' : `${val}%`;
+
+      const Card = ({ title, value, icon: IconComponent, iconColorClass }) => (
+        <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl p-6 shadow-[0_0_15px_rgba(236,72,153,0.1)] border border-pink-500/20 flex items-center justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(236,72,153,0.25)] hover:border-pink-400/50 relative group">
+          <div className={`${iconColorClass} w-12 h-12 rounded-full flex items-center justify-center bg-slate-950 border border-pink-500/30 group-hover:bg-slate-900 transition-all shadow-[0_0_10px_currentColor]`}>
+            <IconComponent className="w-6 h-6" />
+          </div>
+          <div className="flex flex-col items-end text-right">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-pink-400/70 mb-1.5">{title}</h3>
+            <div className="flex items-center gap-2">
+              <p className="text-2xl font-bold text-white tracking-tight drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">{loading ? '...' : value}</p>
+            </div>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
+          <Card title="Total Returns" value={formatNumber(kpis.totalReturns)} icon={PackageMinus} iconColorClass="text-purple-400" />
+          <Card title="Total Cost" value={formatCurrency(kpis.totalReturnCost)} icon={CircleDollarSign} iconColorClass="text-orange-400" />
+          <Card title="Avg Cost" value={formatCurrency(kpis.avgReturnCost)} icon={Receipt} iconColorClass="text-pink-400" />
+          <Card title="Top Reason" value={kpis.topReason || '-'} icon={AlertCircle} iconColorClass="text-violet-400" />
+          <Card title="Return Rate" value={formatPercent(kpis.returnRate)} icon={Percent} iconColorClass="text-fuchsia-400" />
+          <Card title="Sellable %" value={formatPercent(kpis.sellableRate)} icon={CheckCircle2} iconColorClass="text-rose-400" />
+        </div>
+      );
+    };
+
+    const ProductTable = ({ products = [], selectedCountry = 'UAE', loading }) => {
+      const [sortConfig, setSortConfig] = useState({ key: 'returnCost', direction: 'desc' });
+      const [expandedMsku, setExpandedMsku] = useState(null);
+      const currency = selectedCountry === 'KSA' ? 'SAR' : 'AED';
+
+      const sortedProducts = useMemo(() => {
+        let sortableItems = [...products];
+        if (sortConfig !== null) {
+          sortableItems.sort((a, b) => {
+            if (a[sortConfig.key] < b[sortConfig.key]) { return sortConfig.direction === 'asc' ? -1 : 1; }
+            if (a[sortConfig.key] > b[sortConfig.key]) { return sortConfig.direction === 'asc' ? 1 : -1; }
+            return 0;
+          });
+        }
+        return sortableItems;
+      }, [products, sortConfig]);
+
+      const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+        setSortConfig({ key, direction });
+      };
+
+      const getSortIndicator = (columnKey) => {
+        if (sortConfig && sortConfig.key === columnKey) {
+          return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
+        }
+        return '';
+      };
+
+      const formatCurrency = (value) => {
+        if (value === undefined || value === null) return '-';
+        return `${currency} ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      };
+
+      return (
+        <PanelCard title="High Impact Products">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-sm text-pink-50">
+              <thead className="text-xs uppercase bg-purple-950/80 border-b-2 border-pink-500/50 select-none">
+                <tr>
+                  <th onClick={() => requestSort('title')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-pink-400">Product Title <span className="text-pink-600">{getSortIndicator('title')}</span></th>
+                  <th onClick={() => requestSort('asin')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-pink-400">ASIN <span className="text-pink-600">{getSortIndicator('asin')}</span></th>
+                  <th onClick={() => requestSort('msku')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-pink-400">MSKU <span className="text-pink-600">{getSortIndicator('msku')}</span></th>
+                  <th onClick={() => requestSort('salesQty')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-right text-pink-400">Units Ordered <span className="text-pink-600">{getSortIndicator('salesQty')}</span></th>
+                  <th onClick={() => requestSort('returnQty')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-right text-pink-400">Return Qty <span className="text-pink-600">{getSortIndicator('returnQty')}</span></th>
+                  <th onClick={() => requestSort('returnRate')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-right text-pink-400">Return Rate <span className="text-pink-600">{getSortIndicator('returnRate')}</span></th>
+                  <th onClick={() => requestSort('returnCost')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-right text-pink-400">Return Cost <span className="text-pink-600">{getSortIndicator('returnCost')}</span></th>
+                  <th onClick={() => requestSort('sellableQty')} className="px-4 py-3 font-semibold cursor-pointer hover:bg-purple-900 transition-colors text-right text-pink-400">Sellable % <span className="text-pink-600">{getSortIndicator('sellableQty')}</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-pink-500/20">
+                {loading ? (
+                  <tr><td colSpan="8" className="px-4 py-12 text-center text-pink-600">Loading data from Supabase...</td></tr>
+                ) : sortedProducts.length === 0 ? (
+                  <tr><td colSpan="8" className="px-4 py-12 text-center text-pink-600">No products found for this criteria.</td></tr>
+                ) : (
+                  sortedProducts.map((product, idx) => (
+                    <React.Fragment key={`${product.asin}-${product.msku}-${idx}`}>
+                      <tr 
+                        onClick={() => setExpandedMsku(expandedMsku === product.msku ? null : product.msku)}
+                        className={`hover:bg-purple-900/60 transition-colors cursor-pointer ${expandedMsku === product.msku ? 'bg-purple-900/60' : 'bg-transparent'}`}
+                      >
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-pink-50 truncate max-w-[250px]" title={product.title}>{product.title}</div>
+                      </td>
+                      <td className="px-4 py-3 text-pink-400/80">{product.asin}</td>
+                      <td className="px-4 py-3 text-pink-400/80">{product.msku}</td>
+                      <td className="px-4 py-3 text-right text-orange-200 font-medium">
+                          {product.salesQty ? product.salesQty.toLocaleString() : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-pink-100">
+                          {product.returnQty ? product.returnQty.toLocaleString() : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-orange-300">
+                          {product.salesQty > 0 ? ((product.returnQty / product.salesQty) * 100).toFixed(2) + '%' : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-semibold text-orange-400 drop-shadow-[0_0_5px_rgba(249,115,22,0.5)]">
+                          {formatCurrency(product.returnCost)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-pink-400 font-medium">
+                        {product.returnQty > 0 ? ((product.sellableQty / product.returnQty) * 100).toFixed(2) + '%' : '-'}
+                      </td>
+                    </tr>
+                    {expandedMsku === product.msku && (
+                      <tr className="bg-purple-950/60 border-b border-pink-500/20 shadow-inner">
+                        <td colSpan="8" className="px-6 py-5">
+                          <div className="text-sm text-pink-100 max-h-60 overflow-y-auto pr-2">
+                            <h4 className="font-semibold text-pink-300 mb-3 border-b border-pink-500/20 pb-1.5 drop-shadow-[0_0_5px_rgba(236,72,153,0.8)]">Customer Comments ({product.comments ? product.comments.length : 0})</h4>
+                            {product.comments && product.comments.length > 0 ? (
+                              <ul className="space-y-3">
+                                {product.comments.map((c, i) => (
+                                  <li key={i} className="bg-purple-900/80 p-3.5 rounded-lg shadow-sm border border-pink-500/20">
+                                    <div className="flex justify-between items-center mb-1.5">
+                                      <span className="font-semibold text-[11px] text-orange-300 bg-orange-900/40 border border-orange-500/50 px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-[0_0_8px_rgba(249,115,22,0.2)]">{c.reason}</span>
+                                      <span className="text-xs font-medium text-pink-600">{c.date?.split('T')[0] || c.date}</span>
+                                    </div>
+                                    <p className="text-pink-50 leading-relaxed">"{c.comment}"</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-pink-600/80 italic py-2">No customer comments available for this product.</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </PanelCard>
+      );
+    };
+
+    const { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts;
+
+    const ChartSection = ({ timeSeriesData, topSkus, topReasons, loading }) => {
+      if (loading) {
+        return (
+          <div className="w-full bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-[0_0_15px_rgba(236,72,153,0.1)] border border-pink-500/20 h-[400px] flex items-center justify-center mb-6">
+             <div className="flex flex-col items-center">
+               <div className="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_10px_rgba(236,72,153,0.5)]"></div>
+               <span className="text-pink-400 font-medium">Loading visual data...</span>
+             </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="w-full flex flex-col xl:flex-row gap-6 mb-6">
+          {/* Chart A: Time Series Combo Chart */}
+          <div className="flex-[2] bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-[0_0_15px_rgba(236,72,153,0.1)] border border-pink-500/20 p-6 transition-all">
+            <h3 className="text-lg font-bold text-pink-300 mb-4 drop-shadow-[0_0_5px_rgba(236,72,153,0.5)]">Returns Trend over Time</h3>
+            <div className="w-full h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={timeSeriesData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                  <CartesianGrid stroke="#f5f5f5" />
+                  <XAxis dataKey="date" />
+                  <YAxis yAxisId="left" orientation="left" stroke="#ec4899" />
+                  <YAxis yAxisId="right" orientation="right" stroke="#f97316" />
+                  <Tooltip contentStyle={{ backgroundColor: 'rgba(9, 9, 11, 0.95)', borderRadius: '12px', border: '1px solid rgba(236,72,153,0.4)', backdropFilter: 'blur(10px)', boxShadow: '0 0 20px rgba(236,72,153,0.2)' }} itemStyle={{ color: '#fbcfe8' }} />
+                  <Legend wrapperStyle={{ color: '#ec4899' }} />
+                  <Bar yAxisId="left" dataKey="returns" name="Return Qty" barSize={24} fill="#a855f7" radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="returnRate" name="Return Rate (%)" stroke="#f97316" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, stroke: '#f97316', fill: '#09090b' }} activeDot={{ r: 6, strokeWidth: 0, fill: '#f97316', filter: 'drop-shadow(0px 0px 5px #f97316)' }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Side Panel for Top 5 Tables */}
+          <div className="flex-1 flex flex-col gap-6">
+            {/* Chart B: Top 5 SKUs Table */}
+            <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-[0_0_15px_rgba(249,115,22,0.1)] border border-orange-500/20 p-6 flex-1 transition-all">
+              <h3 className="text-md font-bold text-orange-300 mb-4 drop-shadow-[0_0_5px_rgba(249,115,22,0.5)]">Top 5 SKUs (by Return Qty)</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-pink-100">
+                  <thead className="text-xs text-orange-400 uppercase bg-orange-950/30 border-b border-orange-500/30">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">MSKU</th>
+                      <th className="px-3 py-2 text-right font-semibold">Returns</th>
+                      <th className="px-3 py-2 font-semibold">Top Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-orange-500/20">
+                    {topSkus.map((sku, i) => (
+                      <tr key={i} className="hover:bg-purple-900/60 transition-colors">
+                        <td className="px-3 py-2.5 font-medium text-pink-50" title={sku.msku}>
+                          {sku.msku.length > 10 ? sku.msku.substring(0, 10) + '...' : sku.msku}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-orange-200">{sku.returnQty}</td>
+                        <td className="px-3 py-2.5 text-pink-500 text-xs" title={sku.topReason}>
+                          {sku.topReason.length > 15 ? sku.topReason.substring(0, 15) + '...' : sku.topReason}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Chart C: Top 5 Reasons Table */}
+            <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-[0_0_15px_rgba(236,72,153,0.1)] border border-pink-500/20 p-6 flex-1 transition-all">
+              <h3 className="text-md font-bold text-pink-300 mb-4 drop-shadow-[0_0_5px_rgba(236,72,153,0.5)]">Top 5 Return Reasons</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-pink-100">
+                  <thead className="text-xs text-pink-400 uppercase bg-pink-950/30 border-b border-pink-500/30">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Reason</th>
+                      <th className="px-3 py-2 text-right font-semibold">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-pink-500/20">
+                    {topReasons.map((r, i) => (
+                      <tr key={i} className="hover:bg-purple-900/60 transition-colors">
+                        <td className="px-3 py-2.5 font-medium text-pink-50" title={r.reason}>
+                          {r.reason.length > 25 ? r.reason.substring(0, 25) + '...' : r.reason}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-orange-200">{r.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const App = ({ supabase }) => {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const [country, setCountry] = useState('UAE');
+      const [saddlId, setSaddlId] = useState('All');
+      const [dateRange, setDateRange] = useState({
+        startDate: thirtyDaysAgo.toISOString(),
+        endDate: new Date().toISOString()
+      });
+
+      const [availableSaddlIds, setAvailableSaddlIds] = useState([]);
+      const [kpis, setKpis] = useState({ totalReturns: 0, totalReturnCost: 0, avgReturnCost: 0, topReason: '-', returnRate: null });
+      const [products, setProducts] = useState([]);
+      const [timeSeriesData, setTimeSeriesData] = useState([]);
+      const [topReasons, setTopReasons] = useState([]);
+      const [topSkus, setTopSkus] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        const fetchSaddlIds = async () => {
+          try {
+            let query = supabase.from('dashboard_returns');
+            const { data, error } = await query.select('saddl_id');
+            if (error) throw error;
+            const uniqueIds = [...new Set(data.map(d => d.saddl_id).filter(Boolean))];
+            uniqueIds.sort();
+            setAvailableSaddlIds(uniqueIds);
+          } catch (err) {
+            console.error("Error fetching saddl ids:", err);
+          }
+        };
+        fetchSaddlIds();
+      }, [supabase]);
+
+      useEffect(() => {
+        const fetchDashboardData = async () => {
+          setLoading(true);
+          setError(null);
+          try {
+            // Fetch returns data dynamically with pagination
+            let allReturnsData = [];
+            let rPage = 0;
+            const pageSize = 1000;
+            while (true) {
+                let returnsQuery = supabase.from('dashboard_returns').select('*')
+                  .gte('return_date', dateRange.startDate)
+                  .lte('return_date', dateRange.endDate);
+
+                if (country !== 'All') {
+                  returnsQuery = returnsQuery.eq('country', country);
+                }
+                if (saddlId && saddlId !== 'All') {
+                  returnsQuery = returnsQuery.eq('saddl_id', saddlId);
+                }
+                
+                const { data: chunk, error: fetchError } = await returnsQuery.range(rPage * pageSize, (rPage + 1) * pageSize - 1);
+                if (fetchError) throw fetchError;
+                if (!chunk || chunk.length === 0) break;
+                allReturnsData = allReturnsData.concat(chunk);
+                if (chunk.length < pageSize) break;
+                rPage++;
+            }
+            const data = allReturnsData;
+
+            // Fetch sales data dynamically with pagination
+            let allSalesData = [];
+            let sPage = 0;
+            while (true) {
+                let salesQuery = supabase.from('sales_for_returns').select('*')
+                  .gte('report_date', dateRange.startDate.split('T')[0])
+                  .lte('report_date', dateRange.endDate.split('T')[0]);
+                
+                if (saddlId && saddlId !== 'All') {
+                   salesQuery = salesQuery.eq('account_id', saddlId);
+                }
+
+                const { data: chunk, error: salesError } = await salesQuery.range(sPage * pageSize, (sPage + 1) * pageSize - 1);
+                if (salesError) throw salesError;
+                if (!chunk || chunk.length === 0) break;
+                allSalesData = allSalesData.concat(chunk);
+                if (chunk.length < pageSize) break;
+                sPage++;
+            }
+            let salesData = allSalesData;
+
+            if (country !== 'All' && (!saddlId || saddlId === 'All')) {
+                salesData = salesData.filter(row => {
+                    const acc = row.account_id || '';
+                    if (country === 'UAE') {
+                        return ['aurio_uae', 'oneshot_uae', 's2c_uae_test'].includes(acc);
+                    } else if (country === 'KSA') {
+                        return ['oneshot_ksa', 's2c_test'].includes(acc);
+                    }
+                    return true;
+                });
+            }
+
+            let totalUnitsOrdered = 0;
+            const salesByAsin = {};
+            salesData.forEach(row => {
+                const units = row.units_ordered || 0;
+                totalUnitsOrdered += units;
+                const asin = row.child_asin;
+                if (asin) {
+                    salesByAsin[asin] = (salesByAsin[asin] || 0) + units;
+                }
+            });
+
+            // Compute KPIs and aggregate products
+            const productMap = {};
+            let tReturns = 0;
+            let tCost = 0;
+            let tSellable = 0;
+            const reasons = {};
+
+            data.forEach(row => {
+              const qty = row.quantity || 1;
+              const cost = row.true_return_cost || 0;
+              const isSellable = row.disposition === 'SELLABLE';
+              
+              tReturns += qty;
+              tCost += cost;
+              if (isSellable) tSellable += qty;
+              
+              const reason = row.reason_formatted || 'Unknown';
+              reasons[reason] = (reasons[reason] || 0) + 1;
+
+              const msku = row.msku || 'UNKNOWN';
+              if (!productMap[msku]) {
+                productMap[msku] = {
+                  title: row.title || 'Unknown Product',
+                  asin: row.asin || '-',
+                  msku: row.msku || '-',
+                  returnQty: 0,
+                  returnCost: 0,
+                  sellableQty: 0,
+                  salesQty: salesByAsin[row.asin] || 0,
+                  reasonsMap: {},
+                  comments: []
+                };
+              }
+              productMap[msku].returnQty += qty;
+              productMap[msku].returnCost += cost;
+              if (isSellable) productMap[msku].sellableQty += qty;
+              productMap[msku].reasonsMap[reason] = (productMap[msku].reasonsMap[reason] || 0) + 1;
+              if (row.customer_comments && row.customer_comments.trim().length > 0) {
+                productMap[msku].comments.push({ date: row.return_date, comment: row.customer_comments.trim(), reason: reason });
+              }
+            });
+
+            let topR = '-';
+            let maxRC = 0;
+            for (const [r, c] of Object.entries(reasons)) {
+              if (c > maxRC) { maxRC = c; topR = r; }
+            }
+
+            setKpis({
+              totalReturns: tReturns,
+              totalReturnCost: tCost,
+              avgReturnCost: tReturns > 0 ? tCost / tReturns : 0,
+              topReason: topR,
+              returnRate: totalUnitsOrdered > 0 ? ((tReturns / totalUnitsOrdered) * 100).toFixed(2) : 0,
+              sellableRate: tReturns > 0 ? ((tSellable / tReturns) * 100).toFixed(2) : 0
+            });
+            setProducts(Object.values(productMap));
+
+            // Time Series Logic
+            const dateMap = {};
+            const start = new Date(dateRange.startDate);
+            const end = new Date(dateRange.endDate);
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+               const ds = d.toISOString().split('T')[0];
+               dateMap[ds] = { date: ds, returns: 0, sales: 0 };
+            }
+            salesData.forEach(row => {
+               const d = row.report_date;
+               if (d && dateMap[d]) dateMap[d].sales += (row.units_ordered || 0);
+            });
+            data.forEach(row => {
+               const d = row.return_date;
+               if (d && dateMap[d]) dateMap[d].returns += (row.quantity || 1);
+            });
+            const tsData = Object.values(dateMap).map(day => ({
+               date: day.date,
+               returns: day.returns,
+               returnRate: day.sales > 0 ? Number(((day.returns / day.sales) * 100).toFixed(2)) : 0
+            })).sort((a,b) => a.date.localeCompare(b.date));
+            setTimeSeriesData(tsData);
+
+            // Top Reasons Logic
+            const reasonsArr = Object.entries(reasons).map(([reason, count]) => ({ reason, count }));
+            reasonsArr.sort((a,b) => b.count - a.count);
+            setTopReasons(reasonsArr.slice(0, 5));
+
+            // Top Skus Logic
+            const skusArr = Object.values(productMap).map(p => {
+               let topReason = '-';
+               let maxR = 0;
+               for (const [r, c] of Object.entries(p.reasonsMap || {})) {
+                   if (c > maxR) { maxR = c; topReason = r; }
+               }
+               return {
+                  msku: p.msku,
+                  returnQty: p.returnQty,
+                  returnRate: p.salesQty > 0 ? ((p.returnQty / p.salesQty) * 100).toFixed(2) + '%' : '-',
+                  topReason: topReason
+               };
+            });
+            skusArr.sort((a,b) => b.returnQty - a.returnQty);
+            setTopSkus(skusArr.slice(0, 5));
+
+          } catch (err) {
+            console.error("Data fetching error:", err);
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        fetchDashboardData();
+      }, [country, dateRange, saddlId, supabase]);
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          <TopNav />
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative m-6" role="alert">
+              <strong className="font-bold">Database Error: </strong>
+              <span className="block sm:inline">{error}</span>
+            </div>
+          )}
+          <main className="flex-1 w-full p-6">
+            <FilterBar
+              selectedCountry={country}
+              onCountryChange={setCountry}
+              startDate={dateRange.startDate}
+              endDate={dateRange.endDate}
+              onDateChange={setDateRange}
+              saddlId={saddlId}
+              onSaddlIdChange={setSaddlId}
+              availableSaddlIds={availableSaddlIds}
+            />
+
+            <KpiCards 
+              kpis={kpis} 
+              selectedCountry={country} 
+              loading={loading}
+            />
+
+            <ChartSection
+              timeSeriesData={timeSeriesData}
+              topSkus={topSkus}
+              topReasons={topReasons}
+              loading={loading}
+            />
+
+            <ProductTable 
+              products={products} 
+              selectedCountry={country} 
+              loading={loading}
+            />
+          </main>
+        </div>
+      );
+    };
+
+    async function initApp() {
+      try {
+        const response = await fetch('.env');
+        if (!response.ok) throw new Error("Could not load .env file");
+        const text = await response.text();
+        
+        const env = {};
+        text.split(/\r?\n/).forEach(line => {
+          const [key, ...value] = line.split('=');
+          if (key && value.length) env[key.trim()] = value.join('=').trim();
+        });
+
+        if (!env.SUPABASE_URL || !env.SUPABASE_KEY) {
+           throw new Error("Missing SUPABASE_URL or SUPABASE_KEY in .env");
+        }
+
+        const supabaseClient = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App supabase={supabaseClient} />);
+      } catch (err) {
+        document.body.innerHTML = '<div style="color:red; padding:20px; font-weight:bold; font-size:20px;">Initialization Error: ' + err.message + '</div>';
+      }
+    }
+    
+    initApp();
+  </script>
+</body>
+</html>
